@@ -8,11 +8,24 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <FL/Fl_Widget.H>
 
 #define HEADER_HEIGHT 25
 
 void select_file_cb(Fl_Widget *w, void* data);
 void save_file_cb(Fl_Widget *w, void* data);
+
+class FixedButton : public Fl_Button {
+    int fixed_x, fixed_w;
+    public:
+        FixedButton(int X, int Y, int W, int H, const char* L = 0)
+            : Fl_Button(X, Y, W, H, L), fixed_x(X), fixed_w(W) {}
+
+        void resize(int X, int Y, int W, int H) override {
+            Fl_Widget::resize(fixed_x, Y, fixed_w, H);
+        }
+};
+
 
 class Editor {
     public:
@@ -20,8 +33,9 @@ class Editor {
         Fl_Box *container;
         Fl_Box *header;
 
-        Fl_Button *header_open_button;
-        Fl_Button *header_save_button;
+        FixedButton *header_open_button;
+        FixedButton *header_save_button;
+        FixedButton *header_settings_button;
 
         Fl_Text_Buffer *textbuf;
         Fl_Text_Editor *textedit;
@@ -31,23 +45,30 @@ class Editor {
 
             header = new Fl_Box(0, 0, window->w(), HEADER_HEIGHT);
             header->box(FL_FLAT_BOX);
-            header->color(FL_BLACK);
-            header->labelcolor(FL_WHITE);
+            header->color(FL_DARK1);
 
             container = new Fl_Box(0, HEADER_HEIGHT, window->w(), window->h() - HEADER_HEIGHT);
             container->box(FL_FLAT_BOX);
 
-            header_open_button = new Fl_Button(0, 0, 60, HEADER_HEIGHT, "Open");
+            header_open_button = new FixedButton(0, 0, 60, HEADER_HEIGHT, "Open");
             header_open_button->callback(select_file_cb, this);
+            header_open_button->box(FL_NO_BOX);
 
-            header_save_button = new Fl_Button(70, 0, 60, HEADER_HEIGHT, "Save");
-            header_save_button->callback(save_file_cb, this); 
+            header_save_button = new FixedButton(70, 0, 60, HEADER_HEIGHT, "Save");
+            header_save_button->callback(save_file_cb, this);
+            header_save_button->shortcut(FL_CTRL | 's');
+            header_save_button->box(FL_NO_BOX);
+
+            header_settings_button = new FixedButton(140, 0, 60, HEADER_HEIGHT, "Settings");
+            header_settings_button->box(FL_NO_BOX);
 
             textbuf = new Fl_Text_Buffer();
             textedit = new Fl_Text_Editor(0, HEADER_HEIGHT, window->w(), window->h());
 
             textedit->buffer(textbuf);
             textbuf->text("");
+
+            textedit->color(FL_GRAY);
 
             window->resizable(container);
             window->size_range(400, 300);
