@@ -26,6 +26,27 @@ class FixedButton : public Fl_Button {
         }
 };
 
+Fl_Text_Editor *textedit;
+
+int global_handler(int event) {
+    if (event == FL_MOUSEWHEEL && Fl::event_state(FL_CTRL)) {
+        Fl_Widget *w = Fl::belowmouse();
+        if (w == textedit) {
+            int dy = Fl::event_dy();
+            int sz = textedit->textsize();
+            if (dy < 0)
+                textedit->textsize(sz + 1);
+            else if (dy > 0 && sz > 6)
+                textedit->textsize(sz - 1);
+
+            textedit->redraw();
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 
 class Editor {
     public:
@@ -38,7 +59,6 @@ class Editor {
         FixedButton *header_settings_button;
 
         Fl_Text_Buffer *textbuf;
-        Fl_Text_Editor *textedit;
 
         Editor(){
             window = new Fl_Window(400, 300, "Editor");
@@ -67,6 +87,7 @@ class Editor {
 
             textedit->buffer(textbuf);
             textbuf->text("");
+            textedit->textsize(40);
 
             textedit->color(FL_GRAY);
 
@@ -74,6 +95,8 @@ class Editor {
             window->size_range(400, 300);
             window->end();
             window->show();
+
+            Fl::add_handler(global_handler);
         }
 
         void select_file(){
