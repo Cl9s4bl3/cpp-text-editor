@@ -1,2 +1,5 @@
 main
+editor
 .git/
+.vscode/
+editor.conf

@@ -11,6 +11,8 @@
 #include <FL/Fl_Widget.H>
 
 #define HEADER_HEIGHT 25
+#define CONFIG_FILE "editor.conf"
+#define FALLBACK_FONT_SIZE 20
 
 void select_file_cb(Fl_Widget *w, void* data);
 void save_file_cb(Fl_Widget *w, void* data);
@@ -28,17 +30,71 @@ class FixedButton : public Fl_Button {
 
 Fl_Text_Editor *textedit;
 
-int global_handler(int event) {
-    if (event == FL_MOUSEWHEEL && Fl::event_state(FL_CTRL)) {
-        Fl_Widget *w = Fl::belowmouse();
-        if (w == textedit) {
-            int dy = Fl::event_dy();
-            int sz = textedit->textsize();
-            if (dy < 0)
-                textedit->textsize(sz + 1);
-            else if (dy > 0 && sz > 6)
-                textedit->textsize(sz - 1);
+void saveConfig(const std::string& data){
+    try {
+        std::ofstream outFile(CONFIG_FILE);
 
+        if (!outFile){
+            std::cerr << "Failed to open '" << CONFIG_FILE << "' for writing." << std::endl;
+            return;
+        }
+
+        outFile << data;
+        outFile.close();
+    } catch (const std::exception& e){
+        std::cerr << "An error occurred while trying to save config file. Error: " << e.what() << std::endl;
+    }
+}
+
+int loadFontSize(){
+    try {
+        std::ifstream inFile(CONFIG_FILE);
+        if (!inFile){
+            std::cerr << "Failed to open '" << CONFIG_FILE << "' for reading. Setting " << FALLBACK_FONT_SIZE << " as font size." << std::endl;
+            return FALLBACK_FONT_SIZE;
+        }
+
+        std::string line;
+        std::getline(inFile, line);
+
+        int font_size = std::stoi(line);
+
+        return font_size;
+    } catch (const std::invalid_argument&){
+        std::cerr << "Invalid integer in config file. Setting " << FALLBACK_FONT_SIZE << " as font size." << std::endl;
+        return FALLBACK_FONT_SIZE;
+    } catch (const std::out_of_range&){
+        std::cerr << "Font size is out of integer range. Setting " << FALLBACK_FONT_SIZE << " as font size." << std::endl;
+        return FALLBACK_FONT_SIZE;
+    } catch (const std::exception& e){
+        std::cerr << "An error occurred while trying to load font size. Setting " << FALLBACK_FONT_SIZE << " as font size. Error: " << e.what() << std::endl;
+        return FALLBACK_FONT_SIZE;
+    }
+}
+
+int global_handler(int event) {
+    if (event == FL_SHORTCUT) {
+        int key = Fl::event_key();
+        if (key == 'i'){
+            int sz = textedit->textsize();
+            if (sz >= __INT32_MAX__){
+                return 0;
+            }
+            saveConfig(std::to_string(sz + 5));
+            textedit->textsize(sz + 5);
+            textedit->redisplay_range(0, textedit->buffer()->length());
+            textedit->resize(textedit->x(), textedit->y(), textedit->w(), textedit->h());
+            textedit->redraw();
+            return 1;
+        } else if (key == 'o'){
+            int sz = textedit->textsize();
+            if (sz <= 5){
+                return 0;
+            }
+            saveConfig(std::to_string(sz - 5));
+            textedit->textsize(sz - 5);
+            textedit->redisplay_range(0, textedit->buffer()->length());
+            textedit->resize(textedit->x(), textedit->y(), textedit->w(), textedit->h());
             textedit->redraw();
             return 1;
         }
@@ -87,7 +143,7 @@ class Editor {
 
             textedit->buffer(textbuf);
             textbuf->text("");
-            textedit->textsize(40);
+            textedit->textsize(loadFontSize());
 
             textedit->color(FL_GRAY);
 
