@@ -8,7 +8,6 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <FL/Fl_Widget.H>
 
 #define HEADER_HEIGHT 25
 #define CONFIG_FILE "editor.conf"
@@ -16,6 +15,7 @@
 
 void select_file_cb(Fl_Widget *w, void* data);
 void save_file_cb(Fl_Widget *w, void* data);
+void save_as_cb(Fl_Widget *w, void* data);
 
 class FixedButton : public Fl_Button {
     int fixed_x, fixed_w;
@@ -112,6 +112,7 @@ class Editor {
 
         FixedButton *header_open_button;
         FixedButton *header_save_button;
+        FixedButton *header_save_as_button;
         FixedButton *header_settings_button;
 
         Fl_Text_Buffer *textbuf;
@@ -135,7 +136,11 @@ class Editor {
             header_save_button->shortcut(FL_CTRL | 's');
             header_save_button->box(FL_NO_BOX);
 
-            header_settings_button = new FixedButton(140, 0, 60, HEADER_HEIGHT, "Settings");
+            header_save_as_button = new FixedButton(140, 0, 60, HEADER_HEIGHT, "Save as");
+            header_save_as_button->box(FL_NO_BOX);
+            header_save_as_button->callback(save_as_cb ,this);
+
+            header_settings_button = new FixedButton(210, 0, 60, HEADER_HEIGHT, "Settings");
             header_settings_button->box(FL_NO_BOX);
 
             textbuf = new Fl_Text_Buffer();
@@ -155,19 +160,30 @@ class Editor {
             Fl::add_handler(global_handler);
         }
 
-        void select_file(){
+        void select_file(int type){ // Type 1: File selection, Type 2: Save as
             Fl_Native_File_Chooser browser;
 
-            browser.title("Open a file");
-            browser.type(Fl_Native_File_Chooser::BROWSE_FILE);
-            browser.directory(".");
+            if (type == 1){
+                browser.title("Open a file");
+                browser.type(Fl_Native_File_Chooser::BROWSE_FILE);
+                browser.directory(".");
 
-            switch (browser.show()){
-                case -1: std::cout << "Error: " << browser.errmsg() << std::endl; break;
-                case 1: std::cout << "Action cancelled" << std::endl; break;
-                default: loadContent(browser.filename()); break;
+                switch (browser.show()){
+                    case -1: std::cout << "Error: " << browser.errmsg() << std::endl; break;
+                    case 1: std::cout << "Action cancelled" << std::endl; break;
+                    default: loadContent(browser.filename()); break;
+                }
+            } else if (type == 2){
+                browser.title("Save file as");
+                browser.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+                browser.directory(".");
+
+                switch (browser.show()){
+                    case -1: std::cout << "Error: " << browser.errmsg() << std::endl; break;
+                    case 1: std::cout << "Action cancelled" << std::endl; break;
+                    default: save_as(browser.filename()); break;
+                }
             }
-        
         }
 
         std::string open_file = "";
@@ -205,6 +221,7 @@ class Editor {
                 const std::string data = textbuf->text();
 
                 if (open_file.empty()){
+                    std::cout << "No opened file: cannot save" << std::endl;
                     return;
                 }
 
@@ -221,16 +238,39 @@ class Editor {
                 return;
             }
         }
+
+        void save_as(const char * filepath){
+            try {
+                const std::string data = textbuf->text();
+
+                std::ofstream outFile(filepath);
+                if (!outFile){
+                    std::cerr << "Failed to open '" << filepath << "' for writing." << std::endl;
+                    return;
+                }
+
+                outFile << data;
+                outFile.close();
+            } catch (const std::exception& e){
+                std::cerr << "An error occurred while trying to save content for '" << open_file << "'. Error: " << e.what() << std::endl;
+                return;
+            }
+        }
 };
 
 void select_file_cb(Fl_Widget *w, void* data){
     auto *app = static_cast<Editor*>(data);
-    app->select_file();
+    app->select_file(1);
 }
 
 void save_file_cb(Fl_Widget *w, void* data){
     auto *app = static_cast<Editor*>(data);
     app->save_file();
+}
+
+void save_as_cb(Fl_Widget *w, void* data){
+    auto *app = static_cast<Editor*>(data);
+    app->select_file(2);
 }
 
 int main(){
