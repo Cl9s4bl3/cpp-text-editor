@@ -35,5 +35,5 @@ clang++ -lfltk main.cpp -o editor
 ## Windows (MSYS2)
 
 ```
-g++ main.cpp -static -static-libgcc -static-libstdc++ -lfltk -lcomctl32 -lcomdlg32 -lgdi32 -luser32 -ladvapi32 -lshell32 -lole32 -luuid -lws2_32 -lwinspool -o Editor.exe
+g++ main.cpp -static -static-libgcc -static-libstdc++ -lfltk -lcomctl32 -lcomdlg32 -lgdi32 -luser32 -ladvapi32 -lshell32 -lole32 -luuid -lws2_32 -lwinspool -mwindows -o Editor.exe
 ```

@@ -8,10 +8,12 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <filesystem>
 
 #define HEADER_HEIGHT 25
 #define CONFIG_FILE "editor.conf"
 #define FALLBACK_FONT_SIZE 20
+#define DEFAULT_FONT_SIZE 20
 
 void select_file_cb(Fl_Widget *w, void* data);
 void save_file_cb(Fl_Widget *w, void* data);
@@ -73,6 +75,7 @@ int loadFontSize(){
 }
 
 int global_handler(int event) {
+    if (!textedit) return 0;
     if (event == FL_SHORTCUT) {
         int key = Fl::event_key();
         if (key == 'i'){
@@ -102,7 +105,40 @@ int global_handler(int event) {
 
     return 0;
 }
+class Notification : public Fl_Box {
+    public:
+        std::string current_message;
+        Notification(int X, int Y, int W, int H)
+            : Fl_Box(X, Y, W, H, "") {
+            box(FL_FLAT_BOX);
+            color(fl_rgb_color(255, 220, 120));
+            labelsize(10);
+            labelfont(FL_HELVETICA_BOLD);
+            hide();
+        }
 
+        void show_message(const std::string& msg, int duration_ms, Fl_Color notif_color = FL_YELLOW) {
+            current_message = msg;
+            label(current_message.c_str());
+            color(notif_color);
+            show();
+            redraw();
+
+            Fl::remove_timeout(notification_timeout_cb, this);
+            
+            Fl::add_timeout(duration_ms / 1000.0, notification_timeout_cb, this);
+        }
+
+        static void notification_timeout_cb(void* v) {
+            auto* self = static_cast<Notification*>(v);
+            self->hide();
+            self->redraw();
+        }
+};
+
+inline void notify(Notification* notif, const std::string& msg, int duration, Fl_Color notif_color = FL_YELLOW) {
+    notif->show_message(msg, duration, notif_color);
+}
 
 class Editor {
     public:
@@ -114,6 +150,8 @@ class Editor {
         FixedButton *header_save_button;
         FixedButton *header_save_as_button;
         FixedButton *header_settings_button;
+
+        Notification *notif;
 
         Fl_Text_Buffer *textbuf;
 
@@ -143,6 +181,8 @@ class Editor {
             header_settings_button = new FixedButton(210, 0, 60, HEADER_HEIGHT, "Settings");
             header_settings_button->box(FL_NO_BOX);
 
+            notif = new Notification(0, 0, window->w(), HEADER_HEIGHT);
+
             textbuf = new Fl_Text_Buffer();
             textedit = new Fl_Text_Editor(0, HEADER_HEIGHT, window->w(), window->h());
 
@@ -159,6 +199,8 @@ class Editor {
 
             Fl::add_handler(global_handler);
         }
+
+        std::string open_file = "";
 
         void select_file(int type){ // Type 1: File selection, Type 2: Save as
             Fl_Native_File_Chooser browser;
@@ -186,8 +228,6 @@ class Editor {
             }
         }
 
-        std::string open_file = "";
-
         void loadContent(const char * filepath){
             try {
                 std::ifstream inFile(filepath);
@@ -210,6 +250,8 @@ class Editor {
                 }
                 inFile.close();
                 open_file = filepath;
+
+                notify(notif, ("Successfully loaded file " + open_file + "."), 2000, FL_YELLOW);
             } catch (const std::exception& e){
                 std::cerr << "An error occurred while trying to load content for '" << filepath << "'. Error: " << e.what() << std::endl;
                 return;
@@ -221,7 +263,7 @@ class Editor {
                 const std::string data = textbuf->text();
 
                 if (open_file.empty()){
-                    std::cout << "No opened file: cannot save" << std::endl;
+                    notify(notif, "No file is open: cannot save", 2000, FL_RED);
                     return;
                 }
 
@@ -233,6 +275,8 @@ class Editor {
 
                 outFile << data;
                 outFile.close();
+
+                notify(notif, ("Successfully saved to " + open_file + "."), 2000, FL_GREEN);
             } catch (const std::exception& e){
                 std::cerr << "An error occurred while trying to save content for '" << open_file << "'. Error: " << e.what() << std::endl;
                 return;
@@ -251,6 +295,9 @@ class Editor {
 
                 outFile << data;
                 outFile.close();
+
+                open_file = filepath;
+                notify(notif, ("Successfully created and saved to " + open_file + "."), 2000, FL_GREEN);
             } catch (const std::exception& e){
                 std::cerr << "An error occurred while trying to save content for '" << open_file << "'. Error: " << e.what() << std::endl;
                 return;
@@ -273,7 +320,29 @@ void save_as_cb(Fl_Widget *w, void* data){
     app->select_file(2);
 }
 
+void generateConfigFile(){
+    try {
+
+        if (std::filesystem::exists(CONFIG_FILE)){
+            return;
+        }
+
+        std::ofstream outFile(CONFIG_FILE);
+        if (!outFile){
+            std::cerr << "Failed to open '" << CONFIG_FILE << "' for writing." << std::endl;
+            return;
+        }
+
+        outFile << DEFAULT_FONT_SIZE;
+        outFile.close();
+    } catch (const std::exception& e){
+        std::cerr << "An error occurred while trying to generate config file. Error: " << e.what() << std::endl;
+        return;
+    }
+}
+
 int main(){
+    generateConfigFile();
     Editor editor;
     return Fl::run();
 }
