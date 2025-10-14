@@ -32,8 +32,23 @@ class FixedButton : public Fl_Button {
 
 Fl_Text_Editor *textedit;
 
-void saveConfig(const std::string& data){
+void saveConfig(const std::string& font_size){
     try {
+        std::ifstream inFile(CONFIG_FILE);
+        if (!inFile){
+            std::cerr << "" << std::endl;
+            return;
+        }
+
+        std::string window_pos;
+
+        int i = 0;
+
+        while (std::getline(inFile, window_pos)){
+            i++;
+            if (i == 2) break;
+        }
+
         std::ofstream outFile(CONFIG_FILE);
 
         if (!outFile){
@@ -41,7 +56,7 @@ void saveConfig(const std::string& data){
             return;
         }
 
-        outFile << data;
+        outFile << font_size << "\n" << window_pos;
         outFile.close();
     } catch (const std::exception& e){
         std::cerr << "An error occurred while trying to save config file. Error: " << e.what() << std::endl;
@@ -140,9 +155,10 @@ inline void notify(Notification* notif, const std::string& msg, int duration, Fl
     notif->show_message(msg, duration, notif_color);
 }
 
+Fl_Window *window;
+
 class Editor {
     public:
-        Fl_Window *window;
         Fl_Box *container;
         Fl_Box *header;
 
@@ -156,8 +172,6 @@ class Editor {
         Fl_Text_Buffer *textbuf;
 
         Editor(){
-            window = new Fl_Window(400, 300, "Editor");
-
             header = new Fl_Box(0, 0, window->w(), HEADER_HEIGHT);
             header->box(FL_FLAT_BOX);
             header->color(FL_DARK1);
@@ -320,10 +334,10 @@ void save_as_cb(Fl_Widget *w, void* data){
     app->select_file(2);
 }
 
-void generateConfigFile(){
+void generateConfigFile(int overwrite){
     try {
 
-        if (std::filesystem::exists(CONFIG_FILE)){
+        if (std::filesystem::exists(CONFIG_FILE) && !overwrite){
             return;
         }
 
@@ -341,8 +355,139 @@ void generateConfigFile(){
     }
 }
 
+void save_window_state(Fl_Window *win){
+    try {
+
+        if (!std::filesystem::exists(CONFIG_FILE)){
+            return;
+        }
+
+        std::ifstream inFile(CONFIG_FILE);
+        if (!inFile){
+            std::cerr << "Failed to open '" << CONFIG_FILE << "' for reading." << std::endl;
+            return;
+        }
+
+        std::string font_size;
+
+        if (!std::getline(inFile, font_size) || font_size.empty()){
+            font_size = DEFAULT_FONT_SIZE;
+            std::cerr << "Failed to retrieve font size from config file. Using " << DEFAULT_FONT_SIZE << " as font size." << std::endl;
+        }
+        inFile.close();
+
+        int window_x = win->x();
+        int window_y = win->y();
+        int window_w = win->w();
+        int window_h = win->h();
+        int window_fs = (win->fullscreen_active() ? 1 : 0);
+
+        std::ofstream outFile(CONFIG_FILE);
+        if (!outFile){
+            std::cerr << "Failed to open '" << CONFIG_FILE << "' for writing." << std::endl;
+            return;
+        }
+
+        outFile << font_size << "\n" << window_x << " " << window_y << " " << window_w << " "  << window_h << " " << window_fs << std::endl;
+        outFile.close();
+
+    } catch (const std::invalid_argument&) {
+        std::cerr << "The config file contains non-numberic data. Please remove it and try again." << std::endl;
+        return;
+    } catch (const std::exception& e){
+        std::cerr << "Failed to save window state. Error: " << e.what() << std::endl;
+        return;
+    }
+}
+
+void restore_window_state(Fl_Window *win) { 
+    try {
+        if (!std::filesystem::exists(CONFIG_FILE)){
+            win->resize(0, 0, 400, 300);
+            return;
+        }
+        std::ifstream inFile(CONFIG_FILE);
+        if (!inFile){
+            std::cerr << "Failed to open '" << CONFIG_FILE << "' for reading." << std::endl;
+            return;
+        }
+
+        std::string window_pos;
+        std::string font_size;
+
+        std::string line;
+        int i = 0;
+
+        while (std::getline(inFile, line)){
+            i++;
+            if (i == 1) font_size = line;
+            if (i == 2) { window_pos = line; break; }
+        }
+        inFile.close();
+
+        bool bad_font = false;
+
+        if (font_size.empty()){
+            bad_font = true;
+        } else {
+            try {
+                int fs = std::stoi(font_size);
+                if (fs <= 4 || fs >= __INT32_MAX__) bad_font = true;
+            } catch (...){
+                bad_font = true;
+            }
+        }
+
+        if (bad_font){
+            generateConfigFile(1);
+        }
+
+        if (window_pos.empty()){
+            win->resize(0, 0, 400, 300);
+            return;
+        }
+
+        std::istringstream iss(window_pos);
+
+        std::vector<std::string> tokens;
+
+        std::string token;
+
+        while (iss >> token){
+            tokens.push_back(token);
+        }
+
+        if (tokens.size() < 5){
+            win->resize(0, 0, 400, 300);
+            std::cerr << "Failed to get window position. One of the 5 positions is missing. Check the config file and try again. If this is the first time running the program, you can discard this error." << std::endl;
+            return;
+        }
+
+        int window_x = std::stoi(tokens[0]);
+        int window_y = std::stoi(tokens[1]);
+        int window_w = std::stoi(tokens[2]);
+        int window_h = std::stoi(tokens[3]);
+        int window_fs = std::stoi(tokens[4]);
+
+        if (window_fs){ win->fullscreen(); return; }
+
+        win->resize(window_x, window_y, window_w, window_h);
+        
+    } catch (const std::exception& e){
+        std::cerr << "Failed to restore window state. Error: " << e.what() << std::endl;
+        return;
+    }
+}
+
 int main(){
-    generateConfigFile();
+    generateConfigFile(0);
+    window = new Fl_Window(400, 300, "Editor");
+    restore_window_state(window);
     Editor editor;
-    return Fl::run();
+
+    int ret = Fl::run();
+
+    save_window_state(window);    
+
+    return ret;
 }
